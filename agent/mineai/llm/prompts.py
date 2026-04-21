@@ -90,3 +90,73 @@ def build_state_summary(state: dict[str, Any]) -> str:
         f"Nearby entities: {ents_str}\n"
         f"Nearby blocks: {blks_str}"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Voyager-style improvement prompts
+# ─────────────────────────────────────────────────────────────────────────────
+
+CURRICULUM_PROMPT = """\
+You are a Minecraft progression advisor for an autonomous AI player.
+Given the player's current state, propose the single most useful next concrete task.
+
+Rules:
+- Propose exactly ONE task.
+- The task must be achievable given the current inventory and situation.
+- Prioritise survival (food ≤ 10, health ≤ 8, night without shelter) before tech progression.
+- Do NOT repeat tasks already listed in completed achievements.
+- Follow the rough tech tree:
+    punch trees → crafting table → wooden tools → stone tools → shelter →
+    smelt ore → iron tools → mine deeper → diamonds → enchanting → nether
+
+Respond in this exact format (two lines, no extra text):
+REASON: <one sentence explaining why this task is best right now>
+TASK: <specific, actionable task, e.g. "Craft a stone pickaxe using 3 cobblestone and 2 sticks">
+"""
+
+
+CRITIC_PROMPT = """\
+You are a strict evaluator for an autonomous Minecraft agent.
+Given the agent's goal, the actions it took, and the game state before and after,
+decide whether the goal was meaningfully progressed.
+
+Respond in exactly this format (three lines):
+SUCCESS: true|false
+REASON: <one sentence>
+RETRY_HINT: <what to do differently, or "none" if success>
+"""
+
+
+SKILL_GENERATION_PROMPT = """\
+You are an expert Minecraft bot programmer. Write a reusable Python async skill
+function that accomplishes the given goal using the Mineflayer action API.
+
+## Function contract
+- Signature: `async def run(client, state: dict) -> bool`
+- Call bot actions via: `await client.send_action("<action>", {<params>})`
+- Return True on success, False on failure.
+- Keep the function under 50 lines and focused on one goal.
+
+## Available actions (action name → required params)
+  move_to          x,y,z,range=1
+  collect_block    block_name,count=1,max_distance=32
+  mine_block       x,y,z
+  place_block      x,y,z,face_x=0,face_y=1,face_z=0
+  equip            item_name,destination="hand"
+  craft            item_name,count=1
+  eat              item_name
+  attack           entity_id
+  stop_attack
+  stop_moving
+  activate_block   x,y,z
+  chat             message
+  get_state        (returns new state in result["data"])
+
+## Output format (three sections, nothing else)
+SKILL_NAME: <snake_case_identifier>
+SKILL_DESC: <one sentence description>
+```python
+async def run(client, state: dict) -> bool:
+    # implementation here
+```
+"""

@@ -37,8 +37,15 @@ class Config:
     think_interval: float = field(default_factory=lambda: float(os.getenv("THINK_INTERVAL", "3.0")))
     max_history:    int   = field(default_factory=lambda: int(os.getenv("MAX_HISTORY",      "20")))
 
+    # Voyager-style improvements
+    max_retries:          int = field(default_factory=lambda: int(os.getenv("MAX_RETRIES",          "2")))
+    curriculum_interval:  int = field(default_factory=lambda: int(os.getenv("CURRICULUM_INTERVAL",  "10")))
+    skill_top_k:          int = field(default_factory=lambda: int(os.getenv("SKILL_TOP_K",          "3")))
+    skill_fail_threshold: int = field(default_factory=lambda: int(os.getenv("SKILL_FAIL_THRESHOLD", "3")))
+
     # Persistence
-    memory_path: Path = field(default_factory=lambda: Path(os.getenv("MEMORY_PATH", "data/memory.json")))
+    memory_path:      Path = field(default_factory=lambda: Path(os.getenv("MEMORY_PATH",      "data/memory.json")))
+    skill_chroma_path:Path = field(default_factory=lambda: Path(os.getenv("SKILL_CHROMA_PATH","data/skill_chroma")))
 
     @property
     def llm_base_url(self) -> str:
