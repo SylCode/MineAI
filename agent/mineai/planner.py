@@ -48,18 +48,34 @@ class ReactPlanner:
     def __init__(self, config: Config, memory: AgentMemory) -> None:
         self._cfg    = config
         self._memory = memory
-        self._llm    = LlamaClient(
-            base_url    = config.llm_base_url,
-            model       = config.llm_model,
-            timeout     = config.llm_timeout,
+
+        # Fast local LLM – used every think cycle for ReAct
+        self._llm = LlamaClient(
+            base_url = config.llm_base_url,
+            model    = config.llm_model,
+            timeout  = config.llm_timeout,
+            api_key  = config.llm_api_key,
         )
+
+        # Strong LLM – used for curriculum, critic, skill generation.
+        # Falls back to the local LLM when STRONG_LLM_BASE_URL is not set.
+        self._strong_llm = LlamaClient(
+            base_url = config.strong_llm_effective_url,
+            model    = config.strong_llm_effective_model,
+            timeout  = config.strong_llm_timeout,
+            api_key  = config.strong_llm_effective_key,
+        )
+        if config.strong_llm_base_url:
+            log.info("Strong LLM: %s  model=%s", config.strong_llm_effective_url, config.strong_llm_effective_model)
+        else:
+            log.info("Strong LLM: using same local endpoint as ReAct LLM")
 
         # Voyager components
         self._skill_library = SkillLibrary(
             chroma_dir=config.skill_chroma_path,
         )
-        self._skill_gen   = SkillGenerator(self._llm, self._skill_library)
-        self._curriculum  = CurriculumGenerator(self._llm, self._memory)
+        self._skill_gen   = SkillGenerator(self._strong_llm, self._skill_library)
+        self._curriculum  = CurriculumGenerator(self._strong_llm, self._memory)
 
         # Internal state
         self._chat_queue:    asyncio.Queue[dict[str, Any]] = asyncio.Queue()
@@ -228,7 +244,7 @@ class ReactPlanner:
             },
         ]
         try:
-            reply = await self._llm.chat(messages, max_tokens=150, temperature=0.1)
+            reply = await self._strong_llm.chat(messages, max_tokens=150, temperature=0.1)
         except RuntimeError as exc:
             log.warning("Critic LLM call failed: %s – assuming success", exc)
             return True, "none"

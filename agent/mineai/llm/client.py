@@ -1,9 +1,10 @@
 """
-llm/client.py – async client for the llama.cpp HTTP server.
+llm/client.py – async client for any OpenAI-compatible chat endpoint.
 
-Uses the OpenAI-compatible /v1/chat/completions endpoint which llama.cpp
-exposes by default when started with --jinja or recent builds.
-Falls back to the native /completion endpoint if needed.
+Works with:
+  - llama.cpp  (local, no key)
+  - GitHub Models  (https://models.inference.ai.azure.com, GitHub PAT)
+  - OpenAI API     (https://api.openai.com, OPENAI_API_KEY)
 """
 
 from __future__ import annotations
@@ -17,20 +18,36 @@ log = logging.getLogger("mineai.llm")
 
 
 class LlamaClient:
-    """Thin async wrapper around the llama.cpp HTTP API."""
+    """
+    Async wrapper around any OpenAI-compatible /v1/chat/completions endpoint.
 
-    def __init__(self, base_url: str, model: str = "local-model",
-                 timeout: int = 60) -> None:
+    Pass `api_key` for cloud providers (GitHub Models, OpenAI).
+    Leave it as None for local llama.cpp (no auth header sent).
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        model:    str = "local-model",
+        timeout:  int = 60,
+        api_key:  str | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model    = model
         self._timeout  = aiohttp.ClientTimeout(total=timeout)
+        self._api_key  = api_key
         self._session: aiohttp.ClientSession | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=self._timeout)
+            headers = {}
+            if self._api_key:
+                headers["Authorization"] = f"Bearer {self._api_key}"
+            self._session = aiohttp.ClientSession(
+                timeout=self._timeout, headers=headers
+            )
         return self._session
 
     async def close(self) -> None:
@@ -75,8 +92,8 @@ class LlamaClient:
                 return content
         except aiohttp.ClientConnectorError as exc:
             raise RuntimeError(
-                f"Cannot reach llama.cpp server at {self._base_url}. "
-                "Make sure it is running."
+                f"Cannot reach LLM server at {self._base_url}. "
+                "Check that it is running or that the endpoint URL is correct."
             ) from exc
 
     # ── Convenience: raw completion (fallback) ────────────────────────────────
